@@ -29,7 +29,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
-          python-version: "3.13"
+          python-version-file: pyproject.toml
 
       - name: Install uv
         uses: astral-sh/setup-uv@v7
@@ -39,30 +39,11 @@ jobs:
       - name: Write runtime files
         shell: bash
         env:
-          TRACKHS_BASE_URL: ${{ secrets.TRACKHS_BASE_URL }}
-          TRACKHS_USERNAME: ${{ secrets.TRACKHS_USERNAME }}
-          TRACKHS_PASSWORD: ${{ secrets.TRACKHS_PASSWORD }}
-          GOOGLE_CALENDAR_ID: ${{ secrets.GOOGLE_CALENDAR_ID }}
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          HEALTHCHECKS_PING_URL: ${{ secrets.HEALTHCHECKS_PING_URL }}
           TRACKHS_CALENDAR_CONFIG_TOML: ${{ secrets.TRACKHS_CALENDAR_CONFIG_TOML }}
         run: |
           set -euo pipefail
           umask 077
-
-          cat > .env <<EOF
-          TRACKHS_BASE_URL="${TRACKHS_BASE_URL}"
-          TRACKHS_USERNAME="${TRACKHS_USERNAME}"
-          TRACKHS_PASSWORD="${TRACKHS_PASSWORD}"
-          GOOGLE_CALENDAR_ID="${GOOGLE_CALENDAR_ID}"
-          GOOGLE_AUTH_MODE="service_account"
-          GOOGLE_SERVICE_ACCOUNT_FILE="service-account.json"
-          TELEGRAM_BOT_TOKEN="${TELEGRAM_BOT_TOKEN}"
-          TELEGRAM_CHAT_ID="${TELEGRAM_CHAT_ID}"
-          HEALTHCHECKS_PING_URL="${HEALTHCHECKS_PING_URL}"
-          EOF
 
           printf '%s' "${GOOGLE_SERVICE_ACCOUNT_JSON}" > service-account.json
 
@@ -72,6 +53,16 @@ jobs:
 
       - name: Run sync
         shell: bash
+        env:
+          TRACKHS_BASE_URL: ${{ secrets.TRACKHS_BASE_URL }}
+          TRACKHS_USERNAME: ${{ secrets.TRACKHS_USERNAME }}
+          TRACKHS_PASSWORD: ${{ secrets.TRACKHS_PASSWORD }}
+          GOOGLE_CALENDAR_ID: ${{ secrets.GOOGLE_CALENDAR_ID }}
+          GOOGLE_AUTH_MODE: service_account
+          GOOGLE_SERVICE_ACCOUNT_FILE: service-account.json
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          HEALTHCHECKS_PING_URL: ${{ secrets.HEALTHCHECKS_PING_URL }}
         run: |
           set -euo pipefail
 
@@ -80,4 +71,4 @@ jobs:
             args+=(--dry-run)
           fi
 
-          uv run --env-file .env trackhs-calendar "${args[@]}"
+          uv run trackhs-calendar "${args[@]}"

@@ -186,4 +186,6 @@ The sync workflow expects these repository secrets:
 
 Only the first five are required. `TRACKHS_CALENDAR_CONFIG_TOML` is optional and can contain the contents of a local `config.toml` if you want GitHub Actions to use a custom filter or event template.
 
+The workflow passes secrets as environment variables at runtime. It only writes `service-account.json` and optional `config.toml` to disk inside the runner.
+
 The workflow runs the default text output, not `--verbose` or `--json`, to reduce the chance of printing guest-level details into Actions logs.
