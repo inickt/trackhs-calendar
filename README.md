@@ -170,9 +170,8 @@ This works well for:
 For GitHub Actions or other ephemeral runners, `service_account` mode is usually the simpler Google auth option.
 
 **GitHub Actions**
-The repository includes two workflows:
-- `.github/workflows/trackhs-calendar-sync.yml`: daily sync plus manual `workflow_dispatch`
-- `.github/workflows/keepalive.yml`: keeps scheduled workflows active in low-activity repositories
+The repository includes one workflow:
+- `.github/workflows/trackhs-calendar-sync.yml`: daily sync plus manual `workflow_dispatch`, with a separate keepalive job for low-activity repositories
 
 The sync workflow expects these repository secrets:
 - `TRACKHS_BASE_URL`
