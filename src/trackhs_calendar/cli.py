@@ -248,8 +248,11 @@ def format_action_lines(actions: list[dict[str, str]]) -> list[str]:
     lines: list[str] = []
     for action in actions:
         guest = action.get("guest") or "--"
+        source_type = action.get("source_type") or "--"
+        status = action.get("status") or "--"
         lines.append(
             f"{action['action']} {action['reservation_id']} | {guest} | "
+            f"type={source_type} | status={status} | "
             f"{action['check_in']} -> {action['checkout']} | {action['summary']}"
         )
     return lines

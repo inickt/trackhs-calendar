@@ -31,6 +31,8 @@ class SyncAction:
     summary: str
     guest: str
     unit: str
+    source_type: str
+    status: str
     check_in: str
     checkout: str
 
@@ -41,6 +43,8 @@ class SyncAction:
             "summary": self.summary,
             "guest": self.guest,
             "unit": self.unit,
+            "source_type": self.source_type,
+            "status": self.status,
             "check_in": self.check_in,
             "checkout": self.checkout,
         }
@@ -166,18 +170,23 @@ def action_from_booking(action: str, booking: Booking, app_config: AppConfig) ->
         summary=render_event_summary(booking, app_config.events),
         guest=booking.guest,
         unit=booking.unit,
+        source_type=booking.source_type,
+        status=booking.status,
         check_in=booking.check_in.isoformat(),
         checkout=booking.checkout.isoformat(),
     )
 
 
 def action_from_event(action: str, reservation_id: str, event: dict[str, Any]) -> SyncAction:
+    private = event.get("extendedProperties", {}).get("private", {})
     return SyncAction(
         action=action,
         reservation_id=reservation_id,
         summary=event.get("summary", ""),
         guest="",
         unit="",
+        source_type=private.get("sourceType", ""),
+        status="",
         check_in=event.get("start", {}).get("date", ""),
         checkout=event.get("end", {}).get("date", ""),
     )
