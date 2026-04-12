@@ -27,10 +27,20 @@ class SyncBehaviorConfig:
 
 
 @dataclass(frozen=True)
+class NotifyConfig:
+    known_statuses: tuple[str, ...]
+    known_types: tuple[str, ...]
+    notify_on_actions: bool
+    notify_on_unknown_values: bool
+    notify_on_zero_bookings: bool
+
+
+@dataclass(frozen=True)
 class AppConfig:
     filters: FilterConfig
     events: EventConfig
     sync: SyncBehaviorConfig
+    notify: NotifyConfig
 
 
 DEFAULT_CONFIG = AppConfig(
@@ -55,6 +65,30 @@ DEFAULT_CONFIG = AppConfig(
         managed_by="trackhs-calendar",
         past_years=1,
         future_years=5,
+    ),
+    notify=NotifyConfig(
+        known_statuses=("Confirmed", "Checked In", "Checked Out"),
+        known_types=(
+            "Website",
+            "Airbnb",
+            "VRBO",
+            "Phone Guest",
+            "Owner",
+            "Owner Stay - Clean After",
+            "Owner Stay - No Clean",
+            "Owner Guest",
+            "Owner Referral",
+            "Long Term",
+            "Home2Go",
+            "Comp Stay",
+            "Wedding",
+            "Maintenance Block",
+            "Housekeeping Block",
+            "Wander",
+        ),
+        notify_on_actions=True,
+        notify_on_unknown_values=True,
+        notify_on_zero_bookings=True,
     ),
 )
 
@@ -97,6 +131,7 @@ def load_app_config(config_path: Path) -> AppConfig:
     filters = _read_section(data, "filters")
     events = _read_section(data, "events")
     sync = _read_section(data, "sync")
+    notify = _read_section(data, "notify")
 
     return AppConfig(
         filters=FilterConfig(
@@ -126,6 +161,29 @@ def load_app_config(config_path: Path) -> AppConfig:
             past_years=_read_int(sync, "past_years", DEFAULT_CONFIG.sync.past_years),
             future_years=_read_int(
                 sync, "future_years", DEFAULT_CONFIG.sync.future_years
+            ),
+        ),
+        notify=NotifyConfig(
+            known_statuses=_read_string_list(
+                notify, "known_statuses", DEFAULT_CONFIG.notify.known_statuses
+            ),
+            known_types=_read_string_list(
+                notify, "known_types", DEFAULT_CONFIG.notify.known_types
+            ),
+            notify_on_actions=bool(
+                notify.get("notify_on_actions", DEFAULT_CONFIG.notify.notify_on_actions)
+            ),
+            notify_on_unknown_values=bool(
+                notify.get(
+                    "notify_on_unknown_values",
+                    DEFAULT_CONFIG.notify.notify_on_unknown_values,
+                )
+            ),
+            notify_on_zero_bookings=bool(
+                notify.get(
+                    "notify_on_zero_bookings",
+                    DEFAULT_CONFIG.notify.notify_on_zero_bookings,
+                )
             ),
         ),
     )

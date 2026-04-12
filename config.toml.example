@@ -17,3 +17,27 @@ Booked Date: {booked_date}"""
 managed_by = "trackhs-calendar"
 past_years = 1
 future_years = 5
+
+[notify]
+known_statuses = ["Confirmed", "Checked In", "Checked Out"]
+known_types = [
+  "Website",
+  "Airbnb",
+  "VRBO",
+  "Phone Guest",
+  "Owner",
+  "Owner Stay - Clean After",
+  "Owner Stay - No Clean",
+  "Owner Guest",
+  "Owner Referral",
+  "Long Term",
+  "Home2Go",
+  "Comp Stay",
+  "Wedding",
+  "Maintenance Block",
+  "Housekeeping Block",
+  "Wander",
+]
+notify_on_actions = true
+notify_on_unknown_values = true
+notify_on_zero_bookings = true

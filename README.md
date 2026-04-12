@@ -52,6 +52,9 @@ Environment variables:
 - `GOOGLE_CALENDAR_ID`: target Google Calendar ID
 - `GOOGLE_CREDENTIALS_FILE`: OAuth client JSON path from Google Cloud
 - `GOOGLE_TOKEN_FILE`: local token cache path written after first auth
+- `TELEGRAM_BOT_TOKEN`: optional Telegram bot token for alerts
+- `TELEGRAM_CHAT_ID`: optional Telegram chat ID for alerts
+- `HEALTHCHECKS_PING_URL`: optional Healthchecks ping URL for liveness monitoring
 
 Local env setup:
 - `.env` is ignored by git and intended for local secrets
@@ -81,5 +84,10 @@ Output modes:
 - default `fetch`, `sync`, and `run` output is human-readable text
 - add `--verbose` to include ignored-row samples and per-event action details
 - add `--json` for machine-readable output
+
+Long-term monitoring:
+- `run` sends Healthchecks start/success/fail pings when `HEALTHCHECKS_PING_URL` is set
+- `run` can send Telegram alerts for unexpected types/statuses, zero-booking results, and CRUD actions
+- these alerts are optional and only activate when the relevant environment variables are set
 
 The local export file `download.csv` is intentionally ignored by git.

@@ -7,6 +7,12 @@ from pathlib import Path
 
 from .config import load_app_config
 from .fetch import export_reservations_csv
+from .ops import (
+    maybe_notify,
+    ping_healthchecks_fail,
+    ping_healthchecks_start,
+    ping_healthchecks_success,
+)
 from .trackhs import BookingLoadResult, load_booking_report
 
 
@@ -191,6 +197,7 @@ def main() -> None:
         if command == "run":
             from .google_sync import sync_google_calendar
 
+            ping_healthchecks_start()
             export_reservations_csv(
                 output_path=args.output,
                 start_date=args.start_date,
@@ -198,11 +205,15 @@ def main() -> None:
                 unit=args.unit,
                 search=args.search,
             )
+            booking_report = load_booking_report(args.output, app_config.filters)
             result = sync_google_calendar(
                 csv_path=args.output,
                 dry_run=args.dry_run,
                 app_config=app_config,
             )
+            if not args.dry_run:
+                maybe_notify(result, booking_report, app_config)
+            ping_healthchecks_success()
             emit_result(
                 "run",
                 {
@@ -228,6 +239,8 @@ def main() -> None:
 
         parser.error(f"Unsupported command: {command}")
     except RuntimeError as exc:
+        if command == "run":
+            ping_healthchecks_fail(str(exc))
         print(f"Error: {exc}", file=sys.stderr)
         raise SystemExit(1) from exc
 
