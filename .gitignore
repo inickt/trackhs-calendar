@@ -1,0 +1,10 @@
+.python-version
+.venv/
+.uv-cache/
+__pycache__/
+*.pyc
+dist/
+build/
+*.egg-info/
+download.csv
+state/
