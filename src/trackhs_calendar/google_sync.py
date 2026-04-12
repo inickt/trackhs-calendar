@@ -12,7 +12,7 @@ from googleapiclient.discovery import build
 
 from .config import AppConfig
 from .render import render_event_description, render_event_summary
-from .trackhs import Booking, load_bookings
+from .trackhs import Booking, BookingLoadResult, load_booking_report
 
 SCOPES = ["https://www.googleapis.com/auth/calendar"]
 
@@ -22,6 +22,28 @@ class GoogleConfig:
     calendar_id: str
     credentials_file: Path
     token_file: Path
+
+
+@dataclass(frozen=True)
+class SyncAction:
+    action: str
+    reservation_id: str
+    summary: str
+    guest: str
+    unit: str
+    check_in: str
+    checkout: str
+
+    def to_dict(self) -> dict[str, str]:
+        return {
+            "action": self.action,
+            "reservation_id": self.reservation_id,
+            "summary": self.summary,
+            "guest": self.guest,
+            "unit": self.unit,
+            "check_in": self.check_in,
+            "checkout": self.checkout,
+        }
 
 
 def get_env(name: str) -> str:
@@ -137,6 +159,30 @@ def reservation_id_for_event(event: dict[str, Any]) -> str | None:
     )
 
 
+def action_from_booking(action: str, booking: Booking, app_config: AppConfig) -> SyncAction:
+    return SyncAction(
+        action=action,
+        reservation_id=booking.reservation_id,
+        summary=render_event_summary(booking, app_config.events),
+        guest=booking.guest,
+        unit=booking.unit,
+        check_in=booking.check_in.isoformat(),
+        checkout=booking.checkout.isoformat(),
+    )
+
+
+def action_from_event(action: str, reservation_id: str, event: dict[str, Any]) -> SyncAction:
+    return SyncAction(
+        action=action,
+        reservation_id=reservation_id,
+        summary=event.get("summary", ""),
+        guest="",
+        unit="",
+        check_in=event.get("start", {}).get("date", ""),
+        checkout=event.get("end", {}).get("date", ""),
+    )
+
+
 def events_equal(event: dict[str, Any], desired: dict[str, Any]) -> bool:
     current_private = event.get("extendedProperties", {}).get("private", {})
     desired_private = desired.get("extendedProperties", {}).get("private", {})
@@ -151,10 +197,12 @@ def events_equal(event: dict[str, Any], desired: dict[str, Any]) -> bool:
 
 def sync_google_calendar(csv_path: Path, dry_run: bool, app_config: AppConfig) -> dict[str, Any]:
     google_config = load_google_config()
-    bookings = load_bookings(csv_path, app_config.filters)
+    booking_report = load_booking_report(csv_path, app_config.filters)
+    bookings = booking_report.bookings
     desired_by_reservation = {
         booking.reservation_id: event_payload(booking, app_config) for booking in bookings
     }
+    booking_by_reservation = {booking.reservation_id: booking for booking in bookings}
 
     service = build_service(google_config)
     existing_events = iter_managed_events(service, google_config.calendar_id, app_config)
@@ -164,14 +212,20 @@ def sync_google_calendar(csv_path: Path, dry_run: bool, app_config: AppConfig) -
         if (reservation_id := reservation_id_for_event(event))
     }
 
-    creates: list[str] = []
-    updates: list[str] = []
-    deletes: list[str] = []
+    creates: list[SyncAction] = []
+    updates: list[SyncAction] = []
+    deletes: list[SyncAction] = []
 
     for reservation_id, payload in desired_by_reservation.items():
         existing = existing_by_reservation.get(reservation_id)
         if existing is None:
-            creates.append(reservation_id)
+            creates.append(
+                action_from_booking(
+                    "create",
+                    booking_by_reservation[reservation_id],
+                    app_config,
+                )
+            )
             if not dry_run:
                 service.events().insert(
                     calendarId=google_config.calendar_id,
@@ -180,7 +234,13 @@ def sync_google_calendar(csv_path: Path, dry_run: bool, app_config: AppConfig) -
             continue
 
         if not events_equal(existing, payload):
-            updates.append(reservation_id)
+            updates.append(
+                action_from_booking(
+                    "update",
+                    booking_by_reservation[reservation_id],
+                    app_config,
+                )
+            )
             if not dry_run:
                 service.events().patch(
                     calendarId=google_config.calendar_id,
@@ -191,7 +251,7 @@ def sync_google_calendar(csv_path: Path, dry_run: bool, app_config: AppConfig) -
     for reservation_id, event in existing_by_reservation.items():
         if reservation_id in desired_by_reservation:
             continue
-        deletes.append(reservation_id)
+        deletes.append(action_from_event("delete", reservation_id, event))
         if not dry_run:
             service.events().delete(
                 calendarId=google_config.calendar_id,
@@ -201,8 +261,11 @@ def sync_google_calendar(csv_path: Path, dry_run: bool, app_config: AppConfig) -
     return {
         "dry_run": dry_run,
         "calendar_id": google_config.calendar_id,
+        "rows_read": booking_report.total_rows,
         "bookings_considered": len(bookings),
-        "creates": creates,
-        "updates": updates,
-        "deletes": deletes,
+        "ignored_counts": booking_report.ignored_counts,
+        "ignored_samples": [sample.to_dict() for sample in booking_report.ignored_samples],
+        "creates": [action.to_dict() for action in creates],
+        "updates": [action.to_dict() for action in updates],
+        "deletes": [action.to_dict() for action in deletes],
     }

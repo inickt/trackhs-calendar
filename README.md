@@ -29,6 +29,14 @@ uv run --env-file .env trackhs-calendar sync --dry-run
 uv run --env-file .env trackhs-calendar run
 ```
 
+```sh
+uv run --env-file .env trackhs-calendar run --dry-run --verbose
+```
+
+```sh
+uv run --env-file .env trackhs-calendar run --dry-run --json
+```
+
 Optional fetch filters:
 
 ```sh
@@ -68,5 +76,10 @@ Google Calendar sync:
 Recommended scheduled entrypoint:
 - use `uv run --env-file .env trackhs-calendar run`
 - add `--dry-run` if you want fetch plus reconciliation preview without writing to Google
+
+Output modes:
+- default `fetch`, `sync`, and `run` output is human-readable text
+- add `--verbose` to include ignored-row samples and per-event action details
+- add `--json` for machine-readable output
 
 The local export file `download.csv` is intentionally ignored by git.
