@@ -197,7 +197,8 @@ def main() -> None:
         if command == "run":
             from .google_sync import sync_google_calendar
 
-            ping_healthchecks_start()
+            if not args.dry_run:
+                ping_healthchecks_start()
             export_reservations_csv(
                 output_path=args.output,
                 start_date=args.start_date,
@@ -213,7 +214,7 @@ def main() -> None:
             )
             if not args.dry_run:
                 maybe_notify(result, booking_report, app_config)
-            ping_healthchecks_success()
+                ping_healthchecks_success()
             emit_result(
                 "run",
                 {
@@ -239,7 +240,7 @@ def main() -> None:
 
         parser.error(f"Unsupported command: {command}")
     except RuntimeError as exc:
-        if command == "run":
+        if command == "run" and not getattr(args, "dry_run", False):
             ping_healthchecks_fail(str(exc))
         print(f"Error: {exc}", file=sys.stderr)
         raise SystemExit(1) from exc

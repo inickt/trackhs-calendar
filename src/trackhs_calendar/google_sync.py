@@ -22,8 +22,8 @@ SCOPES = ["https://www.googleapis.com/auth/calendar"]
 class GoogleConfig:
     calendar_id: str
     auth_mode: str
-    credentials_file: Path
-    token_file: Path
+    credentials_file: Path | None
+    token_file: Path | None
     service_account_file: Path | None
 
 
@@ -67,12 +67,14 @@ def load_google_config() -> GoogleConfig:
             "GOOGLE_AUTH_MODE must be either 'oauth' or 'service_account'."
         )
 
+    credentials_file = os.environ.get("GOOGLE_CREDENTIALS_FILE")
+    token_file = os.environ.get("GOOGLE_TOKEN_FILE")
     service_account_file = os.environ.get("GOOGLE_SERVICE_ACCOUNT_FILE")
     return GoogleConfig(
         calendar_id=get_env("GOOGLE_CALENDAR_ID"),
         auth_mode=auth_mode,
-        credentials_file=Path(get_env("GOOGLE_CREDENTIALS_FILE")),
-        token_file=Path(get_env("GOOGLE_TOKEN_FILE")),
+        credentials_file=Path(credentials_file) if credentials_file else None,
+        token_file=Path(token_file) if token_file else None,
         service_account_file=(
             Path(service_account_file) if service_account_file else None
         ),
@@ -80,6 +82,13 @@ def load_google_config() -> GoogleConfig:
 
 
 def get_oauth_credentials(config: GoogleConfig) -> Credentials:
+    if not config.credentials_file:
+        raise RuntimeError(
+            "Missing required environment variable: GOOGLE_CREDENTIALS_FILE"
+        )
+    if not config.token_file:
+        raise RuntimeError("Missing required environment variable: GOOGLE_TOKEN_FILE")
+
     creds: Credentials | None = None
 
     if config.token_file.exists():

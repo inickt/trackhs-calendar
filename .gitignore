@@ -14,3 +14,4 @@ build/
 *.egg-info/
 download.csv
 state/
+service-account.json
