@@ -7,6 +7,7 @@ Current behavior:
 - parses `download.csv` exports
 - keeps only guest bookings from `Website`, `Airbnb`, `VRBO`, and `Phone Guest`
 - keeps only `Confirmed` and `Checked In` reservations
+- syncs managed booking events into Google Calendar
 - prints normalized booking records as JSON
 
 Usage:
@@ -17,6 +18,10 @@ uv run --env-file .env trackhs-calendar fetch
 
 ```sh
 uv run trackhs-calendar preview --pretty
+```
+
+```sh
+uv run --env-file .env trackhs-calendar sync --dry-run
 ```
 
 Optional fetch filters:
@@ -31,10 +36,20 @@ Environment variables:
 - `TRACKHS_USERNAME`: owner portal username
 - `TRACKHS_PASSWORD`: owner portal password
 - `TRACKHS_BASE_URL`: owner portal base URL, for example `https://example.trackhs.com`
+- `GOOGLE_CALENDAR_ID`: target Google Calendar ID
+- `GOOGLE_CREDENTIALS_FILE`: OAuth client JSON path from Google Cloud
+- `GOOGLE_TOKEN_FILE`: local token cache path written after first auth
 
 Local env setup:
 - `.env` is ignored by git and intended for local secrets
 - `.env.example` is checked in as the template
 - `uv run --env-file .env ...` loads the file explicitly
+- `credentials.json` and `token.json` are ignored by git
+
+Google Calendar sync:
+- create a dedicated Google Calendar for the rental
+- create a Google Cloud desktop OAuth client and place its JSON at `credentials.json`
+- first `sync` run will open a browser for consent and write `token.json`
+- synced events are marked with private extended properties so only managed events are touched
 
 The local export file `download.csv` is intentionally ignored by git.

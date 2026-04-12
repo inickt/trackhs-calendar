@@ -64,6 +64,22 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional keyword search filter.",
     )
 
+    sync_parser = subparsers.add_parser(
+        "sync",
+        help="Sync normalized guest bookings into Google Calendar.",
+    )
+    sync_parser.add_argument(
+        "--csv-path",
+        type=Path,
+        default=Path("download.csv"),
+        help="Path to the TrackHS CSV export to sync.",
+    )
+    sync_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print the planned creates, updates, and deletes without calling Google.",
+    )
+
     return parser
 
 
@@ -89,6 +105,13 @@ def main() -> None:
                 search=args.search,
             )
             print(args.output)
+            return
+
+        if command == "sync":
+            from .google_sync import sync_google_calendar
+
+            result = sync_google_calendar(csv_path=args.csv_path, dry_run=args.dry_run)
+            print(json.dumps(result, indent=2))
             return
 
         parser.error(f"Unsupported command: {command}")

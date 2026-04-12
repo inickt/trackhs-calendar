@@ -4,7 +4,11 @@ version = "0.1.0"
 description = "Sync TrackHS booking CSV exports to Google Calendar"
 readme = "README.md"
 requires-python = ">=3.10"
-dependencies = []
+dependencies = [
+    "google-api-python-client>=2.194.0",
+    "google-auth-httplib2>=0.3.1",
+    "google-auth-oauthlib>=1.3.1",
+]
 
 [project.scripts]
 trackhs-calendar = "trackhs_calendar:main"
