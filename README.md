@@ -171,7 +171,7 @@ For GitHub Actions or other ephemeral runners, `service_account` mode is usually
 
 **GitHub Actions**
 The repository includes one workflow:
-- `.github/workflows/trackhs-calendar-sync.yml`: daily sync plus manual `workflow_dispatch`, with a separate keepalive job for low-activity repositories
+- `.github/workflows/trackhs-calendar-sync.yml`: daily sync plus manual `workflow_dispatch`
 
 The sync workflow expects these repository secrets:
 - `TRACKHS_BASE_URL`
