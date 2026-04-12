@@ -2,6 +2,8 @@
 
 Small `uv`-managed Python CLI for turning TrackHS owner CSV exports into normalized guest bookings, with Google Calendar sync to be added next.
 
+This project targets Python 3.13 and relies on `pyproject.toml` for uv's Python selection instead of `.python-version`.
+
 Current behavior:
 - logs into the TrackHS owner portal and exports the reservations CSV
 - parses `download.csv` exports
@@ -22,6 +24,10 @@ uv run trackhs-calendar preview --pretty
 
 ```sh
 uv run --env-file .env trackhs-calendar sync --dry-run
+```
+
+```sh
+uv run --env-file .env trackhs-calendar run
 ```
 
 Optional fetch filters:
@@ -51,5 +57,9 @@ Google Calendar sync:
 - create a Google Cloud desktop OAuth client and place its JSON at `credentials.json`
 - first `sync` run will open a browser for consent and write `token.json`
 - synced events are marked with private extended properties so only managed events are touched
+
+Recommended scheduled entrypoint:
+- use `uv run --env-file .env trackhs-calendar run`
+- add `--dry-run` if you want fetch plus reconciliation preview without writing to Google
 
 The local export file `download.csv` is intentionally ignored by git.

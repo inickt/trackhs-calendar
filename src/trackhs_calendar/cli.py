@@ -64,6 +64,42 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional keyword search filter.",
     )
 
+    run_parser = subparsers.add_parser(
+        "run",
+        help="Fetch the TrackHS CSV, then sync it into Google Calendar.",
+    )
+    run_parser.add_argument(
+        "--output",
+        type=Path,
+        default=Path("download.csv"),
+        help="Where to write the downloaded CSV.",
+    )
+    run_parser.add_argument(
+        "--start-date",
+        default="",
+        help="Optional export filter in YYYY-MM-DD format.",
+    )
+    run_parser.add_argument(
+        "--end-date",
+        default="",
+        help="Optional export filter in YYYY-MM-DD format.",
+    )
+    run_parser.add_argument(
+        "--unit",
+        default="",
+        help="Optional TrackHS unit ID filter.",
+    )
+    run_parser.add_argument(
+        "--search",
+        default="",
+        help="Optional keyword search filter.",
+    )
+    run_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Fetch the CSV, then print the planned Google changes without writing them.",
+    )
+
     sync_parser = subparsers.add_parser(
         "sync",
         help="Sync normalized guest bookings into Google Calendar.",
@@ -105,6 +141,28 @@ def main() -> None:
                 search=args.search,
             )
             print(args.output)
+            return
+
+        if command == "run":
+            from .google_sync import sync_google_calendar
+
+            export_reservations_csv(
+                output_path=args.output,
+                start_date=args.start_date,
+                end_date=args.end_date,
+                unit=args.unit,
+                search=args.search,
+            )
+            result = sync_google_calendar(csv_path=args.output, dry_run=args.dry_run)
+            print(
+                json.dumps(
+                    {
+                        "csv_path": str(args.output),
+                        "sync": result,
+                    },
+                    indent=2,
+                )
+            )
             return
 
         if command == "sync":
