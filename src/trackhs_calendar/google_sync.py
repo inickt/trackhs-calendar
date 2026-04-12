@@ -7,6 +7,7 @@ from typing import Any
 
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
+from google.oauth2.service_account import Credentials as ServiceAccountCredentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 
@@ -20,8 +21,10 @@ SCOPES = ["https://www.googleapis.com/auth/calendar"]
 @dataclass(frozen=True)
 class GoogleConfig:
     calendar_id: str
+    auth_mode: str
     credentials_file: Path
     token_file: Path
+    service_account_file: Path | None
 
 
 @dataclass(frozen=True)
@@ -58,14 +61,25 @@ def get_env(name: str) -> str:
 
 
 def load_google_config() -> GoogleConfig:
+    auth_mode = os.environ.get("GOOGLE_AUTH_MODE", "oauth").strip().lower()
+    if auth_mode not in {"oauth", "service_account"}:
+        raise RuntimeError(
+            "GOOGLE_AUTH_MODE must be either 'oauth' or 'service_account'."
+        )
+
+    service_account_file = os.environ.get("GOOGLE_SERVICE_ACCOUNT_FILE")
     return GoogleConfig(
         calendar_id=get_env("GOOGLE_CALENDAR_ID"),
+        auth_mode=auth_mode,
         credentials_file=Path(get_env("GOOGLE_CREDENTIALS_FILE")),
         token_file=Path(get_env("GOOGLE_TOKEN_FILE")),
+        service_account_file=(
+            Path(service_account_file) if service_account_file else None
+        ),
     )
 
 
-def get_google_credentials(config: GoogleConfig) -> Credentials:
+def get_oauth_credentials(config: GoogleConfig) -> Credentials:
     creds: Credentials | None = None
 
     if config.token_file.exists():
@@ -91,8 +105,28 @@ def get_google_credentials(config: GoogleConfig) -> Credentials:
     return creds
 
 
+def get_service_account_credentials(
+    config: GoogleConfig,
+) -> ServiceAccountCredentials:
+    if not config.service_account_file:
+        raise RuntimeError(
+            "Missing required environment variable: GOOGLE_SERVICE_ACCOUNT_FILE"
+        )
+    if not config.service_account_file.exists():
+        raise RuntimeError(
+            f"Google service account file not found: {config.service_account_file}"
+        )
+    return ServiceAccountCredentials.from_service_account_file(
+        str(config.service_account_file),
+        scopes=SCOPES,
+    )
+
+
 def build_service(config: GoogleConfig):
-    credentials = get_google_credentials(config)
+    if config.auth_mode == "service_account":
+        credentials = get_service_account_credentials(config)
+    else:
+        credentials = get_oauth_credentials(config)
     return build("calendar", "v3", credentials=credentials)
 
 
@@ -270,6 +304,7 @@ def sync_google_calendar(csv_path: Path, dry_run: bool, app_config: AppConfig) -
     return {
         "dry_run": dry_run,
         "calendar_id": google_config.calendar_id,
+        "auth_mode": google_config.auth_mode,
         "rows_read": booking_report.total_rows,
         "bookings_considered": len(bookings),
         "ignored_counts": booking_report.ignored_counts,

@@ -291,6 +291,7 @@ def emit_result(command: str, result: dict, verbose: bool, as_json: bool) -> Non
     if command == "sync":
         print("Sync:")
         print(f"- calendar: {result['calendar_id']}")
+        print(f"- auth mode: {result['auth_mode']}")
         print(f"- dry run: {str(result['dry_run']).lower()}")
         print(f"- rows read: {result['rows_read']}")
         print(f"- included bookings: {result['bookings_considered']}")
@@ -313,6 +314,7 @@ def emit_result(command: str, result: dict, verbose: bool, as_json: bool) -> Non
         print(f"- config: {result['config_path']}")
         print(f"- csv: {result['csv_path']}")
         print(f"- calendar: {sync['calendar_id']}")
+        print(f"- auth mode: {sync['auth_mode']}")
         print(f"- dry run: {str(sync['dry_run']).lower()}")
         print(f"- rows read: {sync['rows_read']}")
         print(f"- included bookings: {sync['bookings_considered']}")

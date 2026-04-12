@@ -50,8 +50,10 @@ Environment variables:
 - `TRACKHS_PASSWORD`: owner portal password
 - `TRACKHS_BASE_URL`: owner portal base URL, for example `https://example.trackhs.com`
 - `GOOGLE_CALENDAR_ID`: target Google Calendar ID
+- `GOOGLE_AUTH_MODE`: `oauth` or `service_account`
 - `GOOGLE_CREDENTIALS_FILE`: OAuth client JSON path from Google Cloud
-- `GOOGLE_TOKEN_FILE`: local token cache path written after first auth
+- `GOOGLE_TOKEN_FILE`: local token cache path written after first OAuth auth
+- `GOOGLE_SERVICE_ACCOUNT_FILE`: service account JSON path for headless auth
 - `TELEGRAM_BOT_TOKEN`: optional Telegram bot token for alerts
 - `TELEGRAM_CHAT_ID`: optional Telegram chat ID for alerts
 - `HEALTHCHECKS_PING_URL`: optional Healthchecks ping URL for liveness monitoring
@@ -60,7 +62,7 @@ Local env setup:
 - `.env` is ignored by git and intended for local secrets
 - `.env.example` is checked in as the template
 - `uv run --env-file .env ...` loads the file explicitly
-- `credentials.json` and `token.json` are ignored by git
+- `credentials.json`, `token.json`, and `service-account.json` are ignored by git
 
 Behavior config:
 - the app runs without a config file by using built-in defaults
@@ -72,8 +74,9 @@ Behavior config:
 
 Google Calendar sync:
 - create a dedicated Google Calendar for the rental
-- create a Google Cloud desktop OAuth client and place its JSON at `credentials.json`
-- first `sync` run will open a browser for consent and write `token.json`
+- for `oauth` mode, create a Google Cloud desktop OAuth client and place its JSON at `credentials.json`
+- first OAuth `sync` run will open a browser for consent and write `token.json`
+- for `service_account` mode, create a service account JSON key at `service-account.json` and share the target calendar with that service account email
 - synced events are marked with private extended properties so only managed events are touched
 
 Recommended scheduled entrypoint:
