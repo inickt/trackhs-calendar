@@ -1,0 +1,84 @@
+name: TrackHS Calendar Sync
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Preview the sync without writing to Google Calendar"
+        required: false
+        default: false
+        type: boolean
+  schedule:
+    - cron: "17 12 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: trackhs-calendar-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Write runtime files
+        shell: bash
+        env:
+          TRACKHS_BASE_URL: ${{ secrets.TRACKHS_BASE_URL }}
+          TRACKHS_USERNAME: ${{ secrets.TRACKHS_USERNAME }}
+          TRACKHS_PASSWORD: ${{ secrets.TRACKHS_PASSWORD }}
+          GOOGLE_CALENDAR_ID: ${{ secrets.GOOGLE_CALENDAR_ID }}
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          HEALTHCHECKS_PING_URL: ${{ secrets.HEALTHCHECKS_PING_URL }}
+          TRACKHS_CALENDAR_CONFIG_TOML: ${{ secrets.TRACKHS_CALENDAR_CONFIG_TOML }}
+        run: |
+          set -euo pipefail
+          umask 077
+
+          cat > .env <<EOF
+          TRACKHS_BASE_URL="${TRACKHS_BASE_URL}"
+          TRACKHS_USERNAME="${TRACKHS_USERNAME}"
+          TRACKHS_PASSWORD="${TRACKHS_PASSWORD}"
+          GOOGLE_CALENDAR_ID="${GOOGLE_CALENDAR_ID}"
+          GOOGLE_AUTH_MODE="service_account"
+          GOOGLE_SERVICE_ACCOUNT_FILE="service-account.json"
+          TELEGRAM_BOT_TOKEN="${TELEGRAM_BOT_TOKEN}"
+          TELEGRAM_CHAT_ID="${TELEGRAM_CHAT_ID}"
+          HEALTHCHECKS_PING_URL="${HEALTHCHECKS_PING_URL}"
+          EOF
+
+          printf '%s' "${GOOGLE_SERVICE_ACCOUNT_JSON}" > service-account.json
+
+          if [ -n "${TRACKHS_CALENDAR_CONFIG_TOML}" ]; then
+            printf '%s\n' "${TRACKHS_CALENDAR_CONFIG_TOML}" > config.toml
+          fi
+
+      - name: Run sync
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          args=(run)
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.dry_run }}" = "true" ]; then
+            args+=(--dry-run)
+          fi
+
+          uv run --env-file .env trackhs-calendar "${args[@]}"
+

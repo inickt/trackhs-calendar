@@ -168,3 +168,23 @@ This works well for:
 - other headless schedulers
 
 For GitHub Actions or other ephemeral runners, `service_account` mode is usually the simpler Google auth option.
+
+**GitHub Actions**
+The repository includes two workflows:
+- `.github/workflows/trackhs-calendar-sync.yml`: daily sync plus manual `workflow_dispatch`
+- `.github/workflows/keepalive.yml`: keeps scheduled workflows active in low-activity repositories
+
+The sync workflow expects these repository secrets:
+- `TRACKHS_BASE_URL`
+- `TRACKHS_USERNAME`
+- `TRACKHS_PASSWORD`
+- `GOOGLE_CALENDAR_ID`
+- `GOOGLE_SERVICE_ACCOUNT_JSON`
+- `TELEGRAM_BOT_TOKEN`
+- `TELEGRAM_CHAT_ID`
+- `HEALTHCHECKS_PING_URL`
+- `TRACKHS_CALENDAR_CONFIG_TOML`
+
+Only the first five are required. `TRACKHS_CALENDAR_CONFIG_TOML` is optional and can contain the contents of a local `config.toml` if you want GitHub Actions to use a custom filter or event template.
+
+The workflow runs the default text output, not `--verbose` or `--json`, to reduce the chance of printing guest-level details into Actions logs.
