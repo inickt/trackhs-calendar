@@ -33,6 +33,32 @@ class AppConfig:
     sync: SyncBehaviorConfig
 
 
+DEFAULT_CONFIG = AppConfig(
+    filters=FilterConfig(
+        include_statuses=("Confirmed", "Checked In"),
+        exclude_statuses=(),
+        include_types=("Website", "Airbnb", "VRBO", "Phone Guest"),
+        exclude_types=(),
+    ),
+    events=EventConfig(
+        summary="Booked: {source_type}",
+        description=(
+            "Managed by trackhs-calendar.\n"
+            "Reservation ID: {reservation_id}\n"
+            "Status: {status}\n"
+            "Type: {source_type}\n"
+            "Unit: {unit}\n"
+            "Booked Date: {booked_date}"
+        ),
+    ),
+    sync=SyncBehaviorConfig(
+        managed_by="trackhs-calendar",
+        past_years=1,
+        future_years=5,
+    ),
+)
+
+
 def _read_section(data: dict, section: str) -> dict:
     value = data.get(section, {})
     if not isinstance(value, dict):
@@ -40,33 +66,33 @@ def _read_section(data: dict, section: str) -> dict:
     return value
 
 
-def _read_string_list(section: dict, key: str) -> tuple[str, ...]:
-    value = section.get(key, [])
+def _read_string_list(section: dict, key: str, default: tuple[str, ...]) -> tuple[str, ...]:
+    value = section.get(key, list(default))
     if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
         raise RuntimeError(f"Config key must be a string list: {key}")
     return tuple(item.strip() for item in value if item.strip())
 
 
-def _read_string(section: dict, key: str) -> str:
-    value = section.get(key)
+def _read_string(section: dict, key: str, default: str) -> str:
+    value = section.get(key, default)
     if not isinstance(value, str) or not value.strip():
         raise RuntimeError(f"Config key must be a non-empty string: {key}")
     return value
 
 
-def _read_int(section: dict, key: str) -> int:
-    value = section.get(key)
+def _read_int(section: dict, key: str, default: int) -> int:
+    value = section.get(key, default)
     if not isinstance(value, int):
         raise RuntimeError(f"Config key must be an integer: {key}")
     return value
 
 
 def load_app_config(config_path: Path) -> AppConfig:
-    if not config_path.exists():
-        raise RuntimeError(f"Config file not found: {config_path}")
-
-    with config_path.open("rb") as handle:
-        data = tomllib.load(handle)
+    if config_path.exists():
+        with config_path.open("rb") as handle:
+            data = tomllib.load(handle)
+    else:
+        data = {}
 
     filters = _read_section(data, "filters")
     events = _read_section(data, "events")
@@ -74,18 +100,32 @@ def load_app_config(config_path: Path) -> AppConfig:
 
     return AppConfig(
         filters=FilterConfig(
-            include_statuses=_read_string_list(filters, "include_statuses"),
-            exclude_statuses=_read_string_list(filters, "exclude_statuses"),
-            include_types=_read_string_list(filters, "include_types"),
-            exclude_types=_read_string_list(filters, "exclude_types"),
+            include_statuses=_read_string_list(
+                filters, "include_statuses", DEFAULT_CONFIG.filters.include_statuses
+            ),
+            exclude_statuses=_read_string_list(
+                filters, "exclude_statuses", DEFAULT_CONFIG.filters.exclude_statuses
+            ),
+            include_types=_read_string_list(
+                filters, "include_types", DEFAULT_CONFIG.filters.include_types
+            ),
+            exclude_types=_read_string_list(
+                filters, "exclude_types", DEFAULT_CONFIG.filters.exclude_types
+            ),
         ),
         events=EventConfig(
-            summary=_read_string(events, "summary"),
-            description=_read_string(events, "description"),
+            summary=_read_string(events, "summary", DEFAULT_CONFIG.events.summary),
+            description=_read_string(
+                events, "description", DEFAULT_CONFIG.events.description
+            ),
         ),
         sync=SyncBehaviorConfig(
-            managed_by=_read_string(sync, "managed_by"),
-            past_years=_read_int(sync, "past_years"),
-            future_years=_read_int(sync, "future_years"),
+            managed_by=_read_string(
+                sync, "managed_by", DEFAULT_CONFIG.sync.managed_by
+            ),
+            past_years=_read_int(sync, "past_years", DEFAULT_CONFIG.sync.past_years),
+            future_years=_read_int(
+                sync, "future_years", DEFAULT_CONFIG.sync.future_years
+            ),
         ),
     )

@@ -25,7 +25,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--config",
         type=Path,
         default=Path("config.toml"),
-        help="Path to the behavior config file.",
+        help="Path to the optional behavior config file.",
     )
 
     subparsers = parser.add_subparsers(dest="command", required=False)
