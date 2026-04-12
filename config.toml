@@ -1,0 +1,19 @@
+[filters]
+include_statuses = ["Confirmed", "Checked In"]
+exclude_statuses = []
+include_types = ["Website", "Airbnb", "VRBO", "Phone Guest"]
+exclude_types = []
+
+[events]
+summary = "Booked: {source_type}"
+description = """Managed by trackhs-calendar.
+Reservation ID: {reservation_id}
+Status: {status}
+Type: {source_type}
+Unit: {unit}
+Booked Date: {booked_date}"""
+
+[sync]
+managed_by = "trackhs-calendar"
+past_years = 1
+future_years = 5

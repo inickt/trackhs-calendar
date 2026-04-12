@@ -5,8 +5,7 @@ from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 
-ALLOWED_TYPES = {"Website", "Airbnb", "VRBO", "Phone Guest"}
-ALLOWED_STATUSES = {"Confirmed", "Checked In"}
+from .config import FilterConfig
 
 
 @dataclass(frozen=True)
@@ -42,7 +41,15 @@ def parse_date(raw_value: str, field_name: str, row_number: int) -> date:
         ) from exc
 
 
-def load_bookings(csv_path: Path) -> list[Booking]:
+def should_include_value(value: str, include: tuple[str, ...], exclude: tuple[str, ...]) -> bool:
+    if include and value not in include:
+        return False
+    if value in exclude:
+        return False
+    return True
+
+
+def load_bookings(csv_path: Path, filters: FilterConfig) -> list[Booking]:
     with csv_path.open(newline="", encoding="utf-8-sig") as handle:
         reader = csv.DictReader(handle)
         bookings: list[Booking] = []
@@ -51,7 +58,18 @@ def load_bookings(csv_path: Path) -> list[Booking]:
             source_type = (row.get("Type") or "").strip()
             status = (row.get("Status") or "").strip()
 
-            if source_type not in ALLOWED_TYPES or status not in ALLOWED_STATUSES:
+            if not should_include_value(
+                source_type,
+                filters.include_types,
+                filters.exclude_types,
+            ):
+                continue
+
+            if not should_include_value(
+                status,
+                filters.include_statuses,
+                filters.exclude_statuses,
+            ):
                 continue
 
             check_in = parse_date((row.get("Check-In") or "").strip(), "Check-In", row_number)

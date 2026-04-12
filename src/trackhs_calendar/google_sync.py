@@ -10,16 +10,15 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 
+from .config import AppConfig
+from .render import render_event_description, render_event_summary
 from .trackhs import Booking, load_bookings
 
 SCOPES = ["https://www.googleapis.com/auth/calendar"]
-MANAGED_BY = "trackhs-calendar"
-SYNC_PAST_YEARS = 1
-SYNC_FUTURE_YEARS = 5
 
 
 @dataclass(frozen=True)
-class SyncConfig:
+class GoogleConfig:
     calendar_id: str
     credentials_file: Path
     token_file: Path
@@ -32,15 +31,15 @@ def get_env(name: str) -> str:
     return value
 
 
-def load_config() -> SyncConfig:
-    return SyncConfig(
+def load_google_config() -> GoogleConfig:
+    return GoogleConfig(
         calendar_id=get_env("GOOGLE_CALENDAR_ID"),
         credentials_file=Path(get_env("GOOGLE_CREDENTIALS_FILE")),
         token_file=Path(get_env("GOOGLE_TOKEN_FILE")),
     )
 
 
-def get_google_credentials(config: SyncConfig) -> Credentials:
+def get_google_credentials(config: GoogleConfig) -> Credentials:
     creds: Credentials | None = None
 
     if config.token_file.exists():
@@ -66,43 +65,35 @@ def get_google_credentials(config: SyncConfig) -> Credentials:
     return creds
 
 
-def build_service(config: SyncConfig):
+def build_service(config: GoogleConfig):
     credentials = get_google_credentials(config)
     return build("calendar", "v3", credentials=credentials)
 
 
-def sync_window() -> tuple[str, str]:
+def sync_window(app_config: AppConfig) -> tuple[str, str]:
     today = date.today()
-    time_min = datetime(today.year - SYNC_PAST_YEARS, 1, 1, tzinfo=timezone.utc)
-    time_max = datetime(today.year + SYNC_FUTURE_YEARS, 12, 31, 23, 59, 59, tzinfo=timezone.utc)
+    time_min = datetime(today.year - app_config.sync.past_years, 1, 1, tzinfo=timezone.utc)
+    time_max = datetime(
+        today.year + app_config.sync.future_years,
+        12,
+        31,
+        23,
+        59,
+        59,
+        tzinfo=timezone.utc,
+    )
     return time_min.isoformat(), time_max.isoformat()
 
 
-def booking_summary(booking: Booking) -> str:
-    return f"Booked: {booking.source_type}"
-
-
-def booking_description(booking: Booking) -> str:
-    lines = [
-        "Managed by trackhs-calendar.",
-        f"Reservation ID: {booking.reservation_id}",
-        f"Status: {booking.status}",
-        f"Type: {booking.source_type}",
-        f"Unit: {booking.unit}",
-        f"Booked Date: {booking.booked_date.isoformat()}",
-    ]
-    return "\n".join(lines)
-
-
-def event_payload(booking: Booking) -> dict[str, Any]:
+def event_payload(booking: Booking, app_config: AppConfig) -> dict[str, Any]:
     return {
-        "summary": booking_summary(booking),
-        "description": booking_description(booking),
+        "summary": render_event_summary(booking, app_config.events),
+        "description": render_event_description(booking, app_config.events),
         "start": {"date": booking.check_in.isoformat()},
         "end": {"date": booking.checkout.isoformat()},
         "extendedProperties": {
             "private": {
-                "managedBy": MANAGED_BY,
+                "managedBy": app_config.sync.managed_by,
                 "reservationId": booking.reservation_id,
                 "sourceType": booking.source_type,
             }
@@ -110,8 +101,8 @@ def event_payload(booking: Booking) -> dict[str, Any]:
     }
 
 
-def iter_managed_events(service, calendar_id: str) -> list[dict[str, Any]]:
-    time_min, time_max = sync_window()
+def iter_managed_events(service, calendar_id: str, app_config: AppConfig) -> list[dict[str, Any]]:
+    time_min, time_max = sync_window(app_config)
     events: list[dict[str, Any]] = []
     page_token: str | None = None
 
@@ -120,7 +111,7 @@ def iter_managed_events(service, calendar_id: str) -> list[dict[str, Any]]:
             service.events()
             .list(
                 calendarId=calendar_id,
-                privateExtendedProperty=f"managedBy={MANAGED_BY}",
+                privateExtendedProperty=f"managedBy={app_config.sync.managed_by}",
                 singleEvents=True,
                 showDeleted=False,
                 timeMin=time_min,
@@ -158,15 +149,15 @@ def events_equal(event: dict[str, Any], desired: dict[str, Any]) -> bool:
     )
 
 
-def sync_google_calendar(csv_path: Path, dry_run: bool) -> dict[str, Any]:
-    config = load_config()
-    bookings = load_bookings(csv_path)
+def sync_google_calendar(csv_path: Path, dry_run: bool, app_config: AppConfig) -> dict[str, Any]:
+    google_config = load_google_config()
+    bookings = load_bookings(csv_path, app_config.filters)
     desired_by_reservation = {
-        booking.reservation_id: event_payload(booking) for booking in bookings
+        booking.reservation_id: event_payload(booking, app_config) for booking in bookings
     }
 
-    service = build_service(config)
-    existing_events = iter_managed_events(service, config.calendar_id)
+    service = build_service(google_config)
+    existing_events = iter_managed_events(service, google_config.calendar_id, app_config)
     existing_by_reservation = {
         reservation_id: event
         for event in existing_events
@@ -183,7 +174,7 @@ def sync_google_calendar(csv_path: Path, dry_run: bool) -> dict[str, Any]:
             creates.append(reservation_id)
             if not dry_run:
                 service.events().insert(
-                    calendarId=config.calendar_id,
+                    calendarId=google_config.calendar_id,
                     body=payload,
                 ).execute()
             continue
@@ -192,7 +183,7 @@ def sync_google_calendar(csv_path: Path, dry_run: bool) -> dict[str, Any]:
             updates.append(reservation_id)
             if not dry_run:
                 service.events().patch(
-                    calendarId=config.calendar_id,
+                    calendarId=google_config.calendar_id,
                     eventId=existing["id"],
                     body=payload,
                 ).execute()
@@ -203,13 +194,13 @@ def sync_google_calendar(csv_path: Path, dry_run: bool) -> dict[str, Any]:
         deletes.append(reservation_id)
         if not dry_run:
             service.events().delete(
-                calendarId=config.calendar_id,
+                calendarId=google_config.calendar_id,
                 eventId=event["id"],
             ).execute()
 
     return {
         "dry_run": dry_run,
-        "calendar_id": config.calendar_id,
+        "calendar_id": google_config.calendar_id,
         "bookings_considered": len(bookings),
         "creates": creates,
         "updates": updates,

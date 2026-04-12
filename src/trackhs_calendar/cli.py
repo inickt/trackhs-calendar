@@ -5,6 +5,7 @@ import json
 import sys
 from pathlib import Path
 
+from .config import load_app_config
 from .fetch import export_reservations_csv
 from .trackhs import load_bookings
 
@@ -19,6 +20,12 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         default=Path("download.csv"),
         help="Path to the TrackHS CSV export.",
+    )
+    parser.add_argument(
+        "--config",
+        type=Path,
+        default=Path("config.toml"),
+        help="Path to the behavior config file.",
     )
 
     subparsers = parser.add_subparsers(dest="command", required=False)
@@ -125,9 +132,10 @@ def main() -> None:
 
     try:
         command = args.command or "preview"
+        app_config = load_app_config(args.config)
 
         if command == "preview":
-            bookings = load_bookings(args.csv_path)
+            bookings = load_bookings(args.csv_path, app_config.filters)
             indent = 2 if args.pretty else None
             print(json.dumps([booking.to_dict() for booking in bookings], indent=indent))
             return
@@ -153,10 +161,15 @@ def main() -> None:
                 unit=args.unit,
                 search=args.search,
             )
-            result = sync_google_calendar(csv_path=args.output, dry_run=args.dry_run)
+            result = sync_google_calendar(
+                csv_path=args.output,
+                dry_run=args.dry_run,
+                app_config=app_config,
+            )
             print(
                 json.dumps(
                     {
+                        "config_path": str(args.config),
                         "csv_path": str(args.output),
                         "sync": result,
                     },
@@ -168,7 +181,11 @@ def main() -> None:
         if command == "sync":
             from .google_sync import sync_google_calendar
 
-            result = sync_google_calendar(csv_path=args.csv_path, dry_run=args.dry_run)
+            result = sync_google_calendar(
+                csv_path=args.csv_path,
+                dry_run=args.dry_run,
+                app_config=app_config,
+            )
             print(json.dumps(result, indent=2))
             return
 

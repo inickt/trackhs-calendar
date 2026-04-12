@@ -7,8 +7,7 @@ This project targets Python 3.13 and relies on `pyproject.toml` for uv's Python 
 Current behavior:
 - logs into the TrackHS owner portal and exports the reservations CSV
 - parses `download.csv` exports
-- keeps only guest bookings from `Website`, `Airbnb`, `VRBO`, and `Phone Guest`
-- keeps only `Confirmed` and `Checked In` reservations
+- applies filter and event-rendering rules from `config.toml`
 - syncs managed booking events into Google Calendar
 - prints normalized booking records as JSON
 
@@ -51,6 +50,12 @@ Local env setup:
 - `.env.example` is checked in as the template
 - `uv run --env-file .env ...` loads the file explicitly
 - `credentials.json` and `token.json` are ignored by git
+
+Behavior config:
+- `config.toml` is checked in and controls filtering, event summary templates, and sync policy
+- template fields available in event strings:
+  `reservation_id`, `status`, `source_type`, `unit`, `guest`, `booked_date`, `check_in`, `checkout`
+- pass `--config path/to/config.toml` to use a different behavior profile
 
 Google Calendar sync:
 - create a dedicated Google Calendar for the rental
