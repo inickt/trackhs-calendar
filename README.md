@@ -1,43 +1,133 @@
-## TrackHS Calendar
+# TrackHS Calendar
 
-Small `uv`-managed Python CLI for turning TrackHS owner CSV exports into normalized guest bookings, with Google Calendar sync to be added next.
+`trackhs-calendar` is a small Python CLI for syncing vacation-rental bookings from a TrackHS owner portal into Google Calendar.
 
-This project targets Python 3.13 and relies on `pyproject.toml` for uv's Python selection instead of `.python-version`.
+The intended use case is a rental property calendar that family members or co-owners can subscribe to, so everyone can see when the property is booked.
 
-Current behavior:
-- logs into the TrackHS owner portal and exports the reservations CSV
-- parses `download.csv` exports
-- applies built-in defaults, optionally overridden by `config.toml`
-- syncs managed booking events into Google Calendar
-- prints normalized booking records as JSON
+At a high level, the tool:
+- logs into a TrackHS owner portal
+- exports the reservations CSV
+- filters and normalizes reservation rows
+- creates, updates, and deletes managed events in Google Calendar
+- optionally sends monitoring alerts
 
-Usage:
+The project uses `uv` and targets Python `3.13`.
+
+**How It Works**
+The sync is one-way:
+
+1. Fetch the latest reservation export from TrackHS.
+2. Apply booking filters from built-in defaults or `config.toml`.
+3. Render calendar event titles and descriptions from templates.
+4. Reconcile Google Calendar so managed events match the latest CSV.
+
+The Google sync is idempotent. Each managed event stores its `reservationId` in private extended properties, so rerunning the tool updates only events owned by this integration.
+
+**Project Layout**
+- `.env`: local secrets and runtime configuration, ignored by git
+- `.env.example`: checked-in environment template
+- `config.toml`: optional local behavior override, ignored by git
+- `config.toml.example`: checked-in behavior example
+- `download.csv`: local export file, ignored by git
+
+**Environment Setup**
+Copy `.env.example` to `.env` and fill in the values you need.
+
+TrackHS:
+- `TRACKHS_BASE_URL`: owner portal base URL, for example `https://example.trackhs.com`
+- `TRACKHS_USERNAME`: owner portal username
+- `TRACKHS_PASSWORD`: owner portal password
+
+Google:
+- `GOOGLE_CALENDAR_ID`: target Google Calendar ID
+- `GOOGLE_AUTH_MODE`: `oauth` or `service_account`
+- `GOOGLE_CREDENTIALS_FILE`: OAuth client JSON path
+- `GOOGLE_TOKEN_FILE`: OAuth token cache path
+- `GOOGLE_SERVICE_ACCOUNT_FILE`: service account JSON path
+
+Optional monitoring:
+- `TELEGRAM_BOT_TOKEN`: Telegram bot token
+- `TELEGRAM_CHAT_ID`: Telegram chat or group ID
+- `HEALTHCHECKS_PING_URL`: Healthchecks ping URL
+
+Git ignores local secret and auth files by default, including `.env`, `credentials.json`, `token.json`, `service-account.json`, and `download.csv`.
+
+**Behavior Configuration**
+The app works without a config file by using built-in defaults.
+
+If you want local behavior overrides, create `config.toml` from `config.toml.example`. Typical settings are:
+- which reservation `types` and `statuses` to include
+- how event `summary` and `description` are rendered
+- sync window and managed event marker
+- notification policy for unknown values and zero-booking runs
+
+Template fields available in event strings:
+- `reservation_id`
+- `status`
+- `source_type`
+- `unit`
+- `guest`
+- `booked_date`
+- `check_in`
+- `checkout`
+
+You can also point at a different config file with `--config path/to/config.toml`.
+
+**Google Authentication**
+Two auth modes are supported.
+
+`oauth`:
+- use a Google Cloud desktop OAuth client JSON
+- first sync opens a browser for consent
+- token refresh state is stored in `GOOGLE_TOKEN_FILE`
+- best for local development and self-hosted runs
+
+`service_account`:
+- use a service account JSON key
+- share the target Google Calendar with the service account email
+- no browser flow and no token cache
+- better for headless deployment such as GitHub Actions
+
+Using a dedicated Google Calendar for the rental is strongly recommended.
+
+**Commands**
+Fetch the latest CSV:
 
 ```sh
 uv run --env-file .env trackhs-calendar fetch
 ```
 
+Preview normalized bookings:
+
 ```sh
 uv run trackhs-calendar preview --pretty
 ```
+
+Dry-run a Google Calendar sync:
 
 ```sh
 uv run --env-file .env trackhs-calendar sync --dry-run
 ```
 
+Run the full fetch + sync flow:
+
 ```sh
 uv run --env-file .env trackhs-calendar run
 ```
+
+Verbose dry-run:
 
 ```sh
 uv run --env-file .env trackhs-calendar run --dry-run --verbose
 ```
 
+Machine-readable JSON output:
+
 ```sh
 uv run --env-file .env trackhs-calendar run --dry-run --json
 ```
 
-Optional fetch filters:
+Optional date range for TrackHS fetch:
 
 ```sh
 uv run --env-file .env trackhs-calendar fetch \
@@ -45,52 +135,36 @@ uv run --env-file .env trackhs-calendar fetch \
   --end-date 2026-12-31
 ```
 
-Environment variables:
-- `TRACKHS_USERNAME`: owner portal username
-- `TRACKHS_PASSWORD`: owner portal password
-- `TRACKHS_BASE_URL`: owner portal base URL, for example `https://example.trackhs.com`
-- `GOOGLE_CALENDAR_ID`: target Google Calendar ID
-- `GOOGLE_AUTH_MODE`: `oauth` or `service_account`
-- `GOOGLE_CREDENTIALS_FILE`: OAuth client JSON path from Google Cloud
-- `GOOGLE_TOKEN_FILE`: local token cache path written after first OAuth auth
-- `GOOGLE_SERVICE_ACCOUNT_FILE`: service account JSON path for headless auth
-- `TELEGRAM_BOT_TOKEN`: optional Telegram bot token for alerts
-- `TELEGRAM_CHAT_ID`: optional Telegram chat ID for alerts
-- `HEALTHCHECKS_PING_URL`: optional Healthchecks ping URL for liveness monitoring
+**Output**
+Default output from `fetch`, `sync`, and `run` is human-readable text.
 
-Local env setup:
-- `.env` is ignored by git and intended for local secrets
-- `.env.example` is checked in as the template
-- `uv run --env-file .env ...` loads the file explicitly
-- `credentials.json`, `token.json`, and `service-account.json` are ignored by git
+Use:
+- `--verbose` for ignored-row samples and per-event action details
+- `--json` for machine-readable output
 
-Behavior config:
-- the app runs without a config file by using built-in defaults
-- `config.toml.example` is checked in as a starting point for local overrides
-- `config.toml` is ignored by git and can override filtering, event templates, and sync policy
-- template fields available in event strings:
-  `reservation_id`, `status`, `source_type`, `unit`, `guest`, `booked_date`, `check_in`, `checkout`
-- pass `--config path/to/config.toml` to use a different behavior profile
+Dry-runs do not write to Google Calendar and do not send Healthchecks or Telegram notifications.
 
-Google Calendar sync:
-- create a dedicated Google Calendar for the rental
-- for `oauth` mode, create a Google Cloud desktop OAuth client and place its JSON at `credentials.json`
-- first OAuth `sync` run will open a browser for consent and write `token.json`
-- for `service_account` mode, create a service account JSON key at `service-account.json` and share the target calendar with that service account email
-- synced events are marked with private extended properties so only managed events are touched
+**Monitoring**
+If configured, `run` can:
+- send Healthchecks start, success, and failure pings
+- send Telegram alerts for creates, updates, deletes, unexpected types or statuses, and zero-booking runs
 
-Recommended scheduled entrypoint:
-- use `uv run --env-file .env trackhs-calendar run`
-- add `--dry-run` if you want fetch plus reconciliation preview without writing to Google
+This is useful for long-running scheduled deployments where you want to know:
+- the script stopped running
+- the script failed
+- reservation data changed
+- TrackHS started returning unexpected values
 
-Output modes:
-- default `fetch`, `sync`, and `run` output is human-readable text
-- add `--verbose` to include ignored-row samples and per-event action details
-- add `--json` for machine-readable output
+**Deployment**
+The recommended scheduled entrypoint is:
 
-Long-term monitoring:
-- `run` sends Healthchecks start/success/fail pings when `HEALTHCHECKS_PING_URL` is set
-- `run` can send Telegram alerts for unexpected types/statuses, zero-booking results, and CRUD actions
-- these alerts are optional and only activate when the relevant environment variables are set
+```sh
+uv run --env-file .env trackhs-calendar run
+```
 
-The local export file `download.csv` is intentionally ignored by git.
+This works well for:
+- a local server with `cron`, `systemd`, or `launchd`
+- GitHub Actions
+- other headless schedulers
+
+For GitHub Actions or other ephemeral runners, `service_account` mode is usually the simpler Google auth option.
