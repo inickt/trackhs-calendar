@@ -11,7 +11,7 @@ from google.oauth2.service_account import Credentials as ServiceAccountCredentia
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 
-from .config import AppConfig
+from .config import AppConfig, FilterConfig
 from .render import render_event_description, render_event_summary
 from .trackhs import Booking, BookingLoadResult, load_booking_report
 
@@ -154,6 +154,32 @@ def sync_window(app_config: AppConfig) -> tuple[str, str]:
     return time_min.isoformat(), time_max.isoformat()
 
 
+def calendar_sync_filters(app_config: AppConfig) -> FilterConfig:
+    """Keep terminal booking statuses eligible for historical calendar sync."""
+    filters = app_config.filters
+    historical_statuses = app_config.sync.historical_statuses
+
+    if filters.include_statuses:
+        include_statuses = tuple(
+            dict.fromkeys((*filters.include_statuses, *historical_statuses))
+        )
+    else:
+        include_statuses = ()
+
+    historical_status_set = set(historical_statuses)
+    exclude_statuses = tuple(
+        status
+        for status in filters.exclude_statuses
+        if status not in historical_status_set
+    )
+    return FilterConfig(
+        include_statuses=include_statuses,
+        exclude_statuses=exclude_statuses,
+        include_types=filters.include_types,
+        exclude_types=filters.exclude_types,
+    )
+
+
 def event_payload(booking: Booking, app_config: AppConfig) -> dict[str, Any]:
     return {
         "summary": render_event_summary(booking, app_config.events),
@@ -247,9 +273,30 @@ def events_equal(event: dict[str, Any], desired: dict[str, Any]) -> bool:
     )
 
 
+def event_has_ended(event: dict[str, Any], today: date | None = None) -> bool:
+    """Return whether an event is historical, accounting for all-day end exclusivity."""
+    end = event.get("end", {})
+    raw_end = end.get("date")
+    if raw_end:
+        try:
+            end_date = date.fromisoformat(raw_end)
+        except ValueError:
+            return False
+    else:
+        raw_end = end.get("dateTime")
+        if not raw_end:
+            return False
+        try:
+            end_date = datetime.fromisoformat(raw_end.replace("Z", "+00:00")).date()
+        except ValueError:
+            return False
+
+    return end_date <= (today or date.today())
+
+
 def sync_google_calendar(csv_path: Path, dry_run: bool, app_config: AppConfig) -> dict[str, Any]:
     google_config = load_google_config()
-    booking_report = load_booking_report(csv_path, app_config.filters)
+    booking_report = load_booking_report(csv_path, calendar_sync_filters(app_config))
     bookings = booking_report.bookings
     desired_by_reservation = {
         booking.reservation_id: event_payload(booking, app_config) for booking in bookings
@@ -302,6 +349,8 @@ def sync_google_calendar(csv_path: Path, dry_run: bool, app_config: AppConfig) -
 
     for reservation_id, event in existing_by_reservation.items():
         if reservation_id in desired_by_reservation:
+            continue
+        if event_has_ended(event):
             continue
         deletes.append(action_from_event("delete", reservation_id, event))
         if not dry_run:

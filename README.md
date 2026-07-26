@@ -59,7 +59,14 @@ If you want local behavior overrides, create `config.toml` from `config.toml.exa
 - which reservation `types` and `statuses` to include
 - how event `summary` and `description` are rendered
 - sync window and managed event marker
+- terminal statuses to retain as calendar history
 - notification policy for unknown values and zero-booking runs
+
+`sync.historical_statuses` defaults to `["Checked Out"]`. These statuses remain
+eligible for calendar sync even when active-booking filters exclude them, so the
+next run recreates any completed events that were previously deleted. Managed
+events whose checkout date has passed are also preserved if a later TrackHS
+export no longer contains the reservation.
 
 Template fields available in event strings:
 - `reservation_id`

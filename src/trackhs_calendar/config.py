@@ -24,6 +24,7 @@ class SyncBehaviorConfig:
     managed_by: str
     past_years: int
     future_years: int
+    historical_statuses: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -65,6 +66,7 @@ DEFAULT_CONFIG = AppConfig(
         managed_by="trackhs-calendar",
         past_years=1,
         future_years=5,
+        historical_statuses=("Checked Out",),
     ),
     notify=NotifyConfig(
         known_statuses=("Confirmed", "Checked In", "Checked Out"),
@@ -161,6 +163,11 @@ def load_app_config(config_path: Path) -> AppConfig:
             past_years=_read_int(sync, "past_years", DEFAULT_CONFIG.sync.past_years),
             future_years=_read_int(
                 sync, "future_years", DEFAULT_CONFIG.sync.future_years
+            ),
+            historical_statuses=_read_string_list(
+                sync,
+                "historical_statuses",
+                DEFAULT_CONFIG.sync.historical_statuses,
             ),
         ),
         notify=NotifyConfig(
