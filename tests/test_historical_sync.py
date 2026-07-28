@@ -16,10 +16,12 @@ from trackhs_calendar.config import (
 )
 from trackhs_calendar.google_sync import (
     GoogleConfig,
+    booking_is_in_sync_window,
     calendar_sync_filters,
     event_has_ended,
     sync_google_calendar,
 )
+from trackhs_calendar.trackhs import Booking
 
 
 def app_config() -> AppConfig:
@@ -90,6 +92,27 @@ class HistoricalSyncTests(unittest.TestCase):
         event = {"end": {"date": "2026-07-25"}}
 
         self.assertTrue(event_has_ended(event, today=date(2026, 7, 26)))
+
+    def test_old_booking_is_outside_active_sync_window(self):
+        config = app_config()
+        booking = Booking(
+            reservation_id="old-history-1",
+            source_type="Website",
+            status="Checked Out",
+            unit="Lakehouse",
+            guest="Historical Guest",
+            booked_date=date(2024, 1, 1),
+            check_in=date(2024, 8, 10),
+            checkout=date(2024, 8, 17),
+        )
+
+        self.assertFalse(
+            booking_is_in_sync_window(
+                booking,
+                config,
+                today=date(2026, 7, 28),
+            )
+        )
 
     def test_next_sync_recreates_previously_deleted_checked_out_event(self):
         service = FakeService()
@@ -205,6 +228,68 @@ class HistoricalSyncTests(unittest.TestCase):
 
         self.assertEqual(result["deletes"], [])
         self.assertEqual(service.events_api.deletes, [])
+
+    def test_old_checked_out_booking_is_not_recreated(self):
+        service = FakeService()
+        with tempfile.TemporaryDirectory() as directory:
+            csv_path = Path(directory) / "bookings.csv"
+            with csv_path.open("w", newline="", encoding="utf-8") as handle:
+                writer = csv.DictWriter(
+                    handle,
+                    fieldnames=[
+                        "Reservation Id",
+                        "Type",
+                        "Status",
+                        "Unit",
+                        "Guest",
+                        "Booked Date",
+                        "Check-In",
+                        "Checkout",
+                    ],
+                )
+                writer.writeheader()
+                writer.writerow(
+                    {
+                        "Reservation Id": "old-history-1",
+                        "Type": "Website",
+                        "Status": "Checked Out",
+                        "Unit": "Lakehouse",
+                        "Guest": "Historical Guest",
+                        "Booked Date": "2000-01-01",
+                        "Check-In": "2000-07-20",
+                        "Checkout": "2000-07-25",
+                    }
+                )
+
+            with (
+                patch(
+                    "trackhs_calendar.google_sync.load_google_config",
+                    return_value=GoogleConfig(
+                        calendar_id="calendar",
+                        auth_mode="service_account",
+                        credentials_file=None,
+                        token_file=None,
+                        service_account_file=None,
+                    ),
+                ),
+                patch(
+                    "trackhs_calendar.google_sync.build_service",
+                    return_value=service,
+                ),
+                patch(
+                    "trackhs_calendar.google_sync.iter_managed_events",
+                    return_value=[],
+                ),
+            ):
+                result = sync_google_calendar(
+                    csv_path=csv_path,
+                    dry_run=False,
+                    app_config=app_config(),
+                )
+
+        self.assertEqual(result["creates"], [])
+        self.assertEqual(result["ignored_counts"]["outside_sync_window"], 1)
+        self.assertEqual(service.events_api.inserts, [])
 
     def test_missing_future_event_is_still_deleted(self):
         service = FakeService()

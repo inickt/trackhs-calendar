@@ -139,19 +139,39 @@ def build_service(config: GoogleConfig):
     return build("calendar", "v3", credentials=credentials)
 
 
+def sync_date_window(
+    app_config: AppConfig,
+    today: date | None = None,
+) -> tuple[date, date]:
+    reference_date = today or date.today()
+    return (
+        date(reference_date.year - app_config.sync.past_years, 1, 1),
+        date(reference_date.year + app_config.sync.future_years, 12, 31),
+    )
+
+
 def sync_window(app_config: AppConfig) -> tuple[str, str]:
-    today = date.today()
-    time_min = datetime(today.year - app_config.sync.past_years, 1, 1, tzinfo=timezone.utc)
+    earliest, latest = sync_date_window(app_config)
+    time_min = datetime.combine(earliest, datetime.min.time(), tzinfo=timezone.utc)
     time_max = datetime(
-        today.year + app_config.sync.future_years,
-        12,
-        31,
+        latest.year,
+        latest.month,
+        latest.day,
         23,
         59,
         59,
         tzinfo=timezone.utc,
     )
     return time_min.isoformat(), time_max.isoformat()
+
+
+def booking_is_in_sync_window(
+    booking: Booking,
+    app_config: AppConfig,
+    today: date | None = None,
+) -> bool:
+    earliest, latest = sync_date_window(app_config, today)
+    return booking.checkout > earliest and booking.check_in <= latest
 
 
 def calendar_sync_filters(app_config: AppConfig) -> FilterConfig:
@@ -297,7 +317,12 @@ def event_has_ended(event: dict[str, Any], today: date | None = None) -> bool:
 def sync_google_calendar(csv_path: Path, dry_run: bool, app_config: AppConfig) -> dict[str, Any]:
     google_config = load_google_config()
     booking_report = load_booking_report(csv_path, calendar_sync_filters(app_config))
-    bookings = booking_report.bookings
+    bookings = [
+        booking
+        for booking in booking_report.bookings
+        if booking_is_in_sync_window(booking, app_config)
+    ]
+    outside_sync_window = len(booking_report.bookings) - len(bookings)
     desired_by_reservation = {
         booking.reservation_id: event_payload(booking, app_config) for booking in bookings
     }
@@ -359,13 +384,17 @@ def sync_google_calendar(csv_path: Path, dry_run: bool, app_config: AppConfig) -
                 eventId=event["id"],
             ).execute()
 
+    ignored_counts = dict(booking_report.ignored_counts)
+    if outside_sync_window:
+        ignored_counts["outside_sync_window"] = outside_sync_window
+
     return {
         "dry_run": dry_run,
         "calendar_id": google_config.calendar_id,
         "auth_mode": google_config.auth_mode,
         "rows_read": booking_report.total_rows,
         "bookings_considered": len(bookings),
-        "ignored_counts": booking_report.ignored_counts,
+        "ignored_counts": ignored_counts,
         "ignored_samples": [sample.to_dict() for sample in booking_report.ignored_samples],
         "creates": [action.to_dict() for action in creates],
         "updates": [action.to_dict() for action in updates],
