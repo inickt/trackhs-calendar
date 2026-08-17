@@ -69,7 +69,7 @@ DEFAULT_CONFIG = AppConfig(
         historical_statuses=("Checked Out",),
     ),
     notify=NotifyConfig(
-        known_statuses=("Confirmed", "Checked In", "Checked Out"),
+        known_statuses=("Confirmed", "Checked In", "Checked Out", "Hold"),
         known_types=(
             "Website",
             "Airbnb",

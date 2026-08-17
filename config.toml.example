@@ -20,7 +20,7 @@ future_years = 5
 historical_statuses = ["Checked Out"]
 
 [notify]
-known_statuses = ["Confirmed", "Checked In", "Checked Out"]
+known_statuses = ["Confirmed", "Checked In", "Checked Out", "Hold"]
 known_types = [
   "Website",
   "Airbnb",
